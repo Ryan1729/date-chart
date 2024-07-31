@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style type="text/css">html, body
+{
+    margin: 0;
+    padding: 0px;
+    background-color:#111;
+}
+</style></head>
+<body>
+    <canvas id="canvas"></canvas>
+</body>
+<script>
+
+const BASE_DATE = 1722065351105
+
+const TIME_X_SCALE = 1/1_000_000
+
+// TODO Have a way to add data and save it to local storage
+const dates = [
+	[BASE_DATE, BASE_DATE + 1_000_000_000, "label 1"],
+    [BASE_DATE + 1_000_000_000, BASE_DATE + 2_000_000_000, "label 2"],
+    [BASE_DATE + 0, BASE_DATE + 3_000_000_000, "label 3"],
+]
+
+const MAX_ZOOM = 8
+const MIN_ZOOM = 1/16
+const SCROLL_SENSITIVITY = 0.0005
+const TAU = Math.PI * 2
+const RADIUS = 1;
+const RED = "#de4949"
+const BLUE = "#3352e1"
+const GREEN = "#30b06e"
+const WHITE = "#eee"
+
+let canvas = document.getElementById("canvas")
+let ctx = canvas.getContext('2d')
+let camera = {
+    offset: { x: 1 * window.innerHeight/4, y: 3 * window.innerHeight/4 },
+    zoom: 1,
+    lastZoom: 1,
+    isDragging: false,
+    dragStart: { x: 0, y: 0 },
+    initialPinchDistanceSq: undefined,
+}
+
+const clampZoom = () => {
+    camera.zoom = Math.min(camera.zoom, MAX_ZOOM)
+    camera.zoom = Math.max(camera.zoom, MIN_ZOOM)
+}
+
+const GRAPH_BASE_X = -100
+const GRAPH_BASE_Y = 50
+
+const FONT_SIZE = 32
+
+const timeToX = (now, time) => {
+	return GRAPH_BASE_X + (time - now.getTime()) * TIME_X_SCALE
+}
+
+function draw()
+{
+    const now = new Date();
+
+    const w = window.innerWidth
+    const h = window.innerHeight
+    canvas.width = w
+    canvas.height = h
+
+    // Translate to the canvas centre before zooming - so you'll always zoom on what you're looking directly at
+    ctx.translate(w / 2, h / 2)
+    ctx.scale(camera.zoom, camera.zoom)
+    ctx.translate(-w / 2 + camera.offset.x, -h / 2 + camera.offset.y)
+    // Needs to be set after the scaling.
+    ctx.font = FONT_SIZE + "px courier"
+    ctx.fillStyle = WHITE
+    ctx.clearRect(0,0,w,h)
+
+    const graphZoomScale = 1
+    const graphZoomRatio = 1 / graphZoomScale
+    ctx.scale(graphZoomRatio, graphZoomRatio)
+
+    ctx.beginPath();
+    ctx.strokeStyle = BLUE
+
+    // Much more than this glitches for some reason
+    const LARGE_NON_GLITCHY_NUMBER = 100_000_000;
+    ctx.moveTo(0, -LARGE_NON_GLITCHY_NUMBER);
+    ctx.lineTo(0, LARGE_NON_GLITCHY_NUMBER);
+
+    ctx.lineWidth = RADIUS * (15/16);
+    ctx.stroke();
+    ctx.closePath();
+
+    ctx.moveTo(0, 0);
+
+    ctx.beginPath();
+    ctx.strokeStyle = RED
+    let y = 0
+    const DATE_H = 40
+    const Y_OFFSET = -(DATE_H + 8)
+    const HUGGING_FONT_OFFSET = FONT_SIZE - 8;
+    for (let i = 0; i < dates.length; i += 1) {
+		let [startDate, endDate, label] = dates[i];
+
+        const startX = timeToX(now, startDate)
+        ctx.roundRect(startX, y, timeToX(now, endDate) - startX, DATE_H);
+
+        ctx.fillText(label || "???", startX, y + DATE_H + HUGGING_FONT_OFFSET)
+
+        y += Y_OFFSET;
+    }
+
+    ctx.strokeStyle = RED
+    ctx.lineWidth = RADIUS * (15/16);
+    ctx.stroke();
+    ctx.closePath();
+
+    // TODO Indicate where days begin and end. Probably with a label for each day
+
+    requestAnimationFrame(draw)
+}
+
+// Gets the relevant location from a mouse or single touch event
+function getEventLocation(e)
+{
+    if (e.touches && e.touches.length == 1)
+    {
+        return { x:e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+    else if (e.clientX !== undefined && e.clientY !== undefined)
+    {
+        return { x: e.clientX, y: e.clientY }
+    }
+    return { x: 0, y: 0 }
+}
+
+function onPointerDown(e)
+{
+    camera.isDragging = true
+    const loc = getEventLocation(e)
+    camera.dragStart.x = loc.x/camera.zoom - camera.offset.x
+    camera.dragStart.y = loc.y/camera.zoom - camera.offset.y
+}
+
+function onPointerUp(e)
+{
+    camera.isDragging = false
+    camera.initialPinchDistanceSq = null
+    camera.lastZoom = camera.zoom
+}
+
+function onPointerMove(e)
+{
+    if (camera.isDragging)
+    {
+        const loc = getEventLocation(e)
+        camera.offset.x = loc.x/camera.zoom - camera.dragStart.x
+        camera.offset.y = loc.y/camera.zoom - camera.dragStart.y
+    }
+}
+
+function handleTouch(e, singleTouchHandler)
+{
+    if (e.touches.length == 1)
+    {
+        singleTouchHandler(e)
+    }
+    else if (e.type == "touchmove" && e.touches.length == 2)
+    {
+        camera.isDragging = false
+        handlePinch(e)
+    }
+}
+
+function handlePinch(e)
+{
+    e.preventDefault()
+
+    const touch1X = e.touches[0].clientX
+    const touch1Y = e.touches[0].clientY
+    const touch2X = e.touches[1].clientX
+    const touch2Y = e.touches[1].clientY
+
+    let currentDistanceSq = (touch1X - touch2X)**2 + (touch1Y - touch2Y)**2
+
+    if (camera.initialPinchDistanceSq === undefined)
+    {
+        camera.initialPinchDistanceSq = currentDistanceSq
+    }
+    else if (!camera.isDragging)
+    {
+        camera.zoom = (currentDistanceSq/camera.initialPinchDistanceSq)*lastZoom
+        clampZoom()
+    }
+}
+
+canvas.addEventListener('mousedown', onPointerDown)
+canvas.addEventListener('touchstart', (e) => handleTouch(e, onPointerDown))
+canvas.addEventListener('mouseup', onPointerUp)
+canvas.addEventListener('touchend',  (e) => handleTouch(e, onPointerUp))
+canvas.addEventListener('mousemove', onPointerMove)
+canvas.addEventListener('touchmove', (e) => handleTouch(e, onPointerMove))
+canvas.addEventListener( 'wheel', (e) => {
+    if (!camera.isDragging) {
+        camera.zoom += -e.deltaY*SCROLL_SENSITIVITY
+        clampZoom()
+    }
+})
+
+// Ready, set, go
+draw()
+
+</script>
+</html>
