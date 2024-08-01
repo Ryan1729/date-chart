@@ -6,23 +6,43 @@
     padding: 0px;
     background-color:#111;
 }
+input {
+    color:#888;
+    background-color:#111;
+}
+select, button {
+    color:#888;
+    background-color:#111;
+}
+.controls {
+    position: fixed;
+    top: 0;
+}
 </style></head>
 <body>
     <canvas id="canvas"></canvas>
+    <div class="controls">
+        <div>
+            <input type="date" id="start-date" />
+            <input type="date" id="end-date" />
+            <input type="text" id="label" />
+            <button id="add-date-button">Add</button>
+        </div>
+        <div>
+            <select id="dates-dropdown"></select>
+            <button id="remove-date-button">Remove</button>
+        </div>
+        <!-- Add dropdown with list of all elements and allow remving selected one -->
+    </div>
 </body>
 <script>
 
-const BASE_DATE = 1722065351105
+// TODO Put message inline into page
+const announceError = alert;
+
+const BLANK_REPLACEMENT = "—";
 
 const TIME_X_SCALE = 1/1_000_000
-
-// TODO Have a way to add data and save it to local storage
-const dates = [
-	[BASE_DATE, BASE_DATE + 1_000_000_000, "label 1"],
-    [BASE_DATE + 1_000_000_000, BASE_DATE + 2_000_000_000, "label 2"],
-    [BASE_DATE + 0, BASE_DATE + 3_000_000_000, "label 3"],
-]
-
 const MAX_ZOOM = 8
 const MIN_ZOOM = 1/16
 const SCROLL_SENSITIVITY = 0.0005
@@ -32,6 +52,81 @@ const RED = "#de4949"
 const BLUE = "#3352e1"
 const GREEN = "#30b06e"
 const WHITE = "#eee"
+
+const BASE_DATE = 1722065351105
+// TODO Save to local storage on each change
+const dates = [
+    [BASE_DATE, BASE_DATE + 1_000_000_000, "label 1"],
+    [BASE_DATE + 1_000_000_000, BASE_DATE + 2_000_000_000, "label 2"],
+    [BASE_DATE + 0, BASE_DATE + 3_000_000_000, "label 3"],
+]
+
+const startupDate = new Date()
+
+const startDateInput = document.getElementById("start-date");
+startDateInput.value = `${startupDate.getFullYear()}-${("0" + (startupDate.getMonth() + 1)).slice(-2)}-${startupDate.getDate()}`;
+
+const endDateInput = document.getElementById("end-date");
+const labelInput = document.getElementById("label");
+const datesDropdown = document.getElementById("dates-dropdown");
+
+const syncDatesDropdown = () => {
+    datesDropdown.innerHTML = "";
+
+    const blankOption = document.createElement("option");
+    blankOption.value = " ";
+    datesDropdown.appendChild(blankOption);
+
+    for (let i = 0; i < dates.length; i += 1) {
+        let [startDate, endDate, label] = dates[i];
+        const option = document.createElement("option");
+        const l = label || BLANK_REPLACEMENT;
+        option.value = startDate+"-"+endDate+"-"+l;
+        option.innerText = l;
+        datesDropdown.appendChild(option);
+    }
+}
+syncDatesDropdown();
+
+document.getElementById("add-date-button").onclick = () => {
+    const startDate = new Date(startDateInput.value)
+    let startTime = startDate.getTime()
+    if (isNaN(startTime)) {
+        announceError("Start date was invalid: \"" + startDateInput.value + "\"")
+        return
+    }
+
+    const endDate = new Date(endDateInput.value)
+    let endTime = endDate.getTime()
+    if (isNaN(endTime)) {
+        announceError("End date was invalid: \"" + endDateInput.value + "\"")
+        return
+    }
+
+    if (startTime > endTime) {
+        let temp = startTime;
+        startTime = endTime;
+        endTime = temp;
+    }
+
+    // TODO? Maintain sorted order here?
+    dates.push([startTime, endTime, labelInput.value || "-"]);
+
+    syncDatesDropdown()
+};
+
+document.getElementById("remove-date-button").onclick = () => {
+    // -1 for the blank at the start
+    const i = datesDropdown.selectedIndex - 1
+    if (i < 0) {
+        announceError("Nothing selected to remove")
+        return
+    }
+
+    dates.splice(i, 1)
+
+    syncDatesDropdown()
+};
 
 let canvas = document.getElementById("canvas")
 let ctx = canvas.getContext('2d')
@@ -55,7 +150,7 @@ const GRAPH_BASE_Y = 50
 const FONT_SIZE = 32
 
 const timeToX = (now, time) => {
-	return GRAPH_BASE_X + (time - now.getTime()) * TIME_X_SCALE
+    return GRAPH_BASE_X + (time - now.getTime()) * TIME_X_SCALE
 }
 
 function draw()
@@ -99,14 +194,15 @@ function draw()
     let y = 0
     const DATE_H = 40
     const Y_OFFSET = -(DATE_H + 8)
+    // TODO Derive this from font metrics
     const HUGGING_FONT_OFFSET = FONT_SIZE - 8;
     for (let i = 0; i < dates.length; i += 1) {
-		let [startDate, endDate, label] = dates[i];
+        let [startDate, endDate, label] = dates[i];
 
         const startX = timeToX(now, startDate)
         ctx.roundRect(startX, y, timeToX(now, endDate) - startX, DATE_H);
 
-        ctx.fillText(label || "???", startX, y + DATE_H + HUGGING_FONT_OFFSET)
+        ctx.fillText(label || BLANK_REPLACEMENT, startX, y + DATE_H + HUGGING_FONT_OFFSET)
 
         y += Y_OFFSET;
     }
