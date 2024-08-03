@@ -54,12 +54,40 @@ const GREEN = "#30b06e"
 const WHITE = "#eee"
 
 const BASE_DATE = 1722065351105
-// TODO Save to local storage on each change
-const dates = [
-    [BASE_DATE, BASE_DATE + 1_000_000_000, "label 1"],
-    [BASE_DATE + 1_000_000_000, BASE_DATE + 2_000_000_000, "label 2"],
-    [BASE_DATE + 0, BASE_DATE + 3_000_000_000, "label 3"],
-]
+
+const loadDatesIndex = () => {
+    let index = window.localStorage.getItem(INDEX_KEY);
+    if (typeof index === "string") {
+        index = JSON.parse(index)
+    }
+    if (typeof index !== "number") {
+        index = 0
+        window.localStorage.setItem(INDEX_KEY, index)
+    }
+
+    return index
+}
+
+const INDEX_KEY = "date-index";
+const DATE_KEYS = ["date-key-0", "date-key-1", "date-key-2", "date-key-3", "date-key-4", "date-key-5"];
+
+const loadDatesOrDefault = () => {
+    const index = loadDatesIndex();
+
+    const parsed = JSON.parse(window.localStorage.getItem(DATE_KEYS[index]))
+
+    if (parsed) {
+        return parsed
+    } else {
+        return [
+            [BASE_DATE, BASE_DATE + 1_000_000_000, "label 1"],
+            [BASE_DATE + 1_000_000_000, BASE_DATE + 2_000_000_000, "label 2"],
+            [BASE_DATE + 0, BASE_DATE + 3_000_000_000, "label 3"],
+        ]
+    }
+};
+
+const dates = loadDatesOrDefault();
 
 const startupDate = new Date()
 
@@ -71,6 +99,9 @@ const labelInput = document.getElementById("label");
 const datesDropdown = document.getElementById("dates-dropdown");
 
 const syncDatesDropdown = () => {
+    //
+    // Update HTML
+    //
     datesDropdown.innerHTML = "";
 
     const blankOption = document.createElement("option");
@@ -85,6 +116,18 @@ const syncDatesDropdown = () => {
         option.innerText = l;
         datesDropdown.appendChild(option);
     }
+
+    //
+    // Save to localStorage
+    //
+
+    let index = loadDatesIndex()
+
+    index += 1;
+    index %= DATE_KEYS.length;
+
+    window.localStorage.setItem(DATE_KEYS[index], JSON.stringify(dates))
+    window.localStorage.setItem(INDEX_KEY, index);
 }
 syncDatesDropdown();
 
@@ -194,15 +237,27 @@ function draw()
     let y = 0
     const DATE_H = 40
     const Y_OFFSET = -(DATE_H + 8)
-    // TODO Derive this from font metrics
-    const HUGGING_FONT_OFFSET = FONT_SIZE - 8;
+
+    const em = ctx.measureText("m").width;
+
     for (let i = 0; i < dates.length; i += 1) {
         let [startDate, endDate, label] = dates[i];
 
         const startX = timeToX(now, startDate)
-        ctx.roundRect(startX, y, timeToX(now, endDate) - startX, DATE_H);
+        const endX = timeToX(now, endDate)
+        ctx.roundRect(startX, y, endX - startX, DATE_H);
 
-        ctx.fillText(label || BLANK_REPLACEMENT, startX, y + DATE_H + HUGGING_FONT_OFFSET)
+        label = label || BLANK_REPLACEMENT;
+
+        const metrics = ctx.measureText(label);
+
+        const labelY = y + (metrics.emHeightAscent + metrics.emHeightDescent);
+
+        // Before label
+        ctx.fillText(label, startX - (metrics.width + em/2), labelY)
+
+        // After label
+        ctx.fillText(label, endX + em/2, labelY)
 
         y += Y_OFFSET;
     }
