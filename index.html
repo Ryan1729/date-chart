@@ -6,17 +6,15 @@
     padding: 0px;
     background-color:#111;
 }
-input {
-    color:#888;
-    background-color:#111;
-}
-select, button {
+* {
     color:#888;
     background-color:#111;
 }
 .controls {
     position: fixed;
     top: 0;
+    border: solid 1px #888;
+    margin: 8px;
 }
 </style></head>
 <body>
@@ -25,14 +23,14 @@ select, button {
         <div>
             <input type="date" id="start-date" />
             <input type="date" id="end-date" />
-            <input type="text" id="label" />
+            <input type="text" id="label" placeholder="label for item" />
             <button id="add-date-button">Add</button>
         </div>
         <div>
             <select id="dates-dropdown"></select>
             <button id="remove-date-button">Remove</button>
         </div>
-        <!-- Add dropdown with list of all elements and allow remving selected one -->
+        <output id="dates-dropdown-output"></output>
     </div>
 </body>
 <script>
@@ -53,8 +51,6 @@ const BLUE = "#3352e1"
 const GREEN = "#30b06e"
 const WHITE = "#eee"
 
-const BASE_DATE = 1722065351105
-
 const loadDatesIndex = () => {
     let index = window.localStorage.getItem(INDEX_KEY);
     if (typeof index === "string") {
@@ -67,6 +63,17 @@ const loadDatesIndex = () => {
 
     return index
 }
+
+const startupDate = new Date();
+
+const dateToYYYYMMDD = (date) => {
+    return `${date.getFullYear()}-${("0" + (date.getMonth() + 1)).slice(-2)}-${("0" + date.getDate()).slice(-2)}`
+}
+
+const startDateInput = document.getElementById("start-date");
+startDateInput.value = dateToYYYYMMDD(startupDate);
+
+const BASE_DATE = startupDate.getTime() - 1_000_000_000;
 
 const INDEX_KEY = "date-index";
 const DATE_KEYS = ["date-key-0", "date-key-1", "date-key-2", "date-key-3", "date-key-4", "date-key-5"];
@@ -82,21 +89,17 @@ const loadDatesOrDefault = () => {
         return [
             [BASE_DATE, BASE_DATE + 1_000_000_000, "label 1"],
             [BASE_DATE + 1_000_000_000, BASE_DATE + 2_000_000_000, "label 2"],
-            [BASE_DATE + 0, BASE_DATE + 3_000_000_000, "label 3"],
+            [BASE_DATE, BASE_DATE + 3_000_000_000, "label 3"],
         ]
     }
 };
 
 const dates = loadDatesOrDefault();
 
-const startupDate = new Date()
-
-const startDateInput = document.getElementById("start-date");
-startDateInput.value = `${startupDate.getFullYear()}-${("0" + (startupDate.getMonth() + 1)).slice(-2)}-${startupDate.getDate()}`;
-
 const endDateInput = document.getElementById("end-date");
 const labelInput = document.getElementById("label");
 const datesDropdown = document.getElementById("dates-dropdown");
+const datesDropdownOutput = document.getElementById("dates-dropdown-output");
 
 const syncDatesDropdown = () => {
     //
@@ -109,13 +112,13 @@ const syncDatesDropdown = () => {
     datesDropdown.appendChild(blankOption);
 
     for (let i = 0; i < dates.length; i += 1) {
-        let [startDate, endDate, label] = dates[i];
+        let [_startDate, _endDate, label] = dates[i];
         const option = document.createElement("option");
         const l = label || BLANK_REPLACEMENT;
-        option.value = startDate+"-"+endDate+"-"+l;
         option.innerText = l;
         datesDropdown.appendChild(option);
     }
+    datesDropdownOutput.textContent = "";
 
     //
     // Save to localStorage
@@ -131,16 +134,58 @@ const syncDatesDropdown = () => {
 }
 syncDatesDropdown();
 
+// -1 for the blank at the start
+const getSelectedIndex = () => datesDropdown.selectedIndex - 1;
+
+datesDropdown.onchange = () => {
+    const i = getSelectedIndex();
+    if (i < 0) { return }
+    let [startDate, endDate, _label] = dates[i];
+    datesDropdownOutput.textContent = dateToYYYYMMDD(new Date(startDate)) + " to " + dateToYYYYMMDD(new Date(endDate));
+};
+
+const yyyymmddToTime = (yyyymmdd) => {
+    let [yyyy, mm, dd] = yyyymmdd.split("-");
+    if (
+        yyyy === undefined
+        || mm === undefined
+        || dd === undefined
+    ) {
+        //TODO return more specific message?
+        return Number.NaN
+    }
+
+    yyyy = parseInt(yyyy, 10)
+    mm = parseInt(mm, 10)
+    dd = parseInt(dd, 10)
+
+    if (
+        isNaN(yyyy)
+        || isNaN(mm)
+        || isNaN(dd)
+    ) {
+        //TODO return more specific message?
+        return Number.NaN
+    }
+
+    const date = new Date(0);
+    // new Date(yyyy, mm - 1, dd) would result in the wrong year because
+    // of two digit gat thinking.
+    date.setFullYear(yyyy)
+    date.setMonth(mm - 1)
+    date.setDate(dd)
+
+    return date.getTime()
+}
+
 document.getElementById("add-date-button").onclick = () => {
-    const startDate = new Date(startDateInput.value)
-    let startTime = startDate.getTime()
+    let startTime = yyyymmddToTime(startDateInput.value)
     if (isNaN(startTime)) {
         announceError("Start date was invalid: \"" + startDateInput.value + "\"")
         return
     }
 
-    const endDate = new Date(endDateInput.value)
-    let endTime = endDate.getTime()
+    let endTime = yyyymmddToTime(endDateInput.value)
     if (isNaN(endTime)) {
         announceError("End date was invalid: \"" + endDateInput.value + "\"")
         return
@@ -159,8 +204,7 @@ document.getElementById("add-date-button").onclick = () => {
 };
 
 document.getElementById("remove-date-button").onclick = () => {
-    // -1 for the blank at the start
-    const i = datesDropdown.selectedIndex - 1
+    const i = getSelectedIndex();
     if (i < 0) {
         announceError("Nothing selected to remove")
         return
