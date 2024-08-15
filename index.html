@@ -217,10 +217,11 @@ document.getElementById("remove-date-button").onclick = () => {
 
 let canvas = document.getElementById("canvas")
 let ctx = canvas.getContext('2d')
+
 let camera = {
-    offset: { x: 1 * window.innerHeight/4, y: 3 * window.innerHeight/4 },
-    zoom: 1,
-    lastZoom: 1,
+    offset: { x: window.innerHeight, y: window.innerHeight },
+    zoom: 0.5,
+    lastZoom: 0.5,
     isDragging: false,
     dragStart: { x: 0, y: 0 },
     initialPinchDistanceSq: undefined,
@@ -231,8 +232,8 @@ const clampZoom = () => {
     camera.zoom = Math.max(camera.zoom, MIN_ZOOM)
 }
 
-const GRAPH_BASE_X = -100
-const GRAPH_BASE_Y = 50
+const GRAPH_BASE_X = 0
+const GRAPH_BASE_Y = 0
 
 const FONT_SIZE = 32
 
@@ -243,6 +244,7 @@ const timeToX = (now, time) => {
 function draw()
 {
     const now = new Date();
+    const renderTime = now.getTime();
 
     const w = window.innerWidth
     const h = window.innerHeight
@@ -276,8 +278,8 @@ function draw()
 
     ctx.moveTo(0, 0);
 
-    ctx.beginPath();
-    ctx.strokeStyle = RED
+    ctx.lineWidth = RADIUS * (15/16);
+
     let y = 0
     const DATE_H = 40
     const Y_OFFSET = -(DATE_H + 8)
@@ -285,10 +287,14 @@ function draw()
     const em = ctx.measureText("m").width;
 
     for (let i = 0; i < dates.length; i += 1) {
+        ctx.beginPath();
+
         let [startDate, endDate, label] = dates[i];
 
-        const startX = timeToX(now, startDate)
-        const endX = timeToX(now, endDate)
+        ctx.strokeStyle = endDate >= renderTime ? GREEN : RED;
+
+        const startX = timeToX(now, startDate);
+        const endX = timeToX(now, endDate);
         ctx.roundRect(startX, y, endX - startX, DATE_H);
 
         label = label || BLANK_REPLACEMENT;
@@ -304,12 +310,11 @@ function draw()
         ctx.fillText(label, endX + em/2, labelY)
 
         y += Y_OFFSET;
+
+        ctx.stroke();
+        ctx.closePath();
     }
 
-    ctx.strokeStyle = RED
-    ctx.lineWidth = RADIUS * (15/16);
-    ctx.stroke();
-    ctx.closePath();
 
     // TODO Indicate where days begin and end. Probably with a label for each day
 
