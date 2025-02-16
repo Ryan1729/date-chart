@@ -18,6 +18,23 @@
     border: solid 1px #888;
     margin: 8px;
 }
+
+.hud {
+    position: fixed;
+    top: 0;
+    right: 0;
+    border: solid 1px #888;
+    padding: 8px;
+    margin: 8px;
+}
+
+.red-text {
+    color: #de4949;
+}
+.green-text {
+    color: #30b06e;
+}
+
 </style></head>
 <body>
     <canvas id="canvas"></canvas>
@@ -33,6 +50,9 @@
             <button id="remove-date-button">Remove</button>
         </div>
         <output id="dates-dropdown-output"></output>
+    </div>
+    <div class="hud">
+        <output id="next-to-end-output"></output>
     </div>
 </body>
 <script>
@@ -102,8 +122,9 @@ const endDateInput = document.getElementById("end-date");
 const labelInput = document.getElementById("label");
 const datesDropdown = document.getElementById("dates-dropdown");
 const datesDropdownOutput = document.getElementById("dates-dropdown-output");
+const nextToEndOutput = document.getElementById("next-to-end-output");
 
-const syncDatesDropdown = () => {
+const syncDatesUI = () => {
     //
     // Update HTML
     //
@@ -122,6 +143,32 @@ const syncDatesDropdown = () => {
     }
     datesDropdownOutput.textContent = "";
 
+    // Update nextToEnd
+
+    let nextToEndDate = 1/0;
+    let nextToEnd = undefined;
+    for (date of dates) {
+        let [_startDate, endDate, _label] = date;
+        if (nextToEndDate > endDate) {
+            nextToEndDate = endDate;
+            nextToEnd = date;
+        }
+    }
+
+    if (nextToEnd) {
+        let [_startDate, endDate, label] = nextToEnd;
+        nextToEndOutput.innerText = label;
+        // TODO update this every frame?
+        const now = (new Date()).getTime();
+        if (endDate <= now) {
+            nextToEndOutput.className = "red-text";
+        } else {
+            nextToEndOutput.className = "green-text";
+        }
+    } else {
+        nextToEndOutput.innerText = "";
+    }
+
     //
     // Save to localStorage
     //
@@ -134,7 +181,7 @@ const syncDatesDropdown = () => {
     window.localStorage.setItem(DATE_KEYS[index], JSON.stringify(dates))
     window.localStorage.setItem(INDEX_KEY, index);
 }
-syncDatesDropdown();
+syncDatesUI();
 
 // -1 for the blank at the start
 const getSelectedIndex = () => datesDropdown.selectedIndex - 1;
@@ -202,7 +249,8 @@ document.getElementById("add-date-button").onclick = () => {
     // TODO? Maintain sorted order here?
     dates.push([startTime, endTime, labelInput.value || "-"]);
 
-    syncDatesDropdown()
+    syncDatesUI()
+
 };
 
 document.getElementById("remove-date-button").onclick = () => {
@@ -214,7 +262,7 @@ document.getElementById("remove-date-button").onclick = () => {
 
     dates.splice(i, 1)
 
-    syncDatesDropdown()
+    syncDatesUI()
 };
 
 let canvas = document.getElementById("canvas")
